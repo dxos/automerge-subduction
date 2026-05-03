@@ -1,0 +1,27 @@
+[workspace]
+resolver = "3"
+members = ["crates/automerge_subduction_unified_wasm"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.90"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/dxos/automerge-subduction"
+
+[workspace.dependencies]
+automerge = { version = "0.8.0", features = ["wasm", "utf16-indexing"] }
+automerge_subduction_wasm = { git = "https://github.com/inkandswitch/subduction", rev = "8984f900f2ceb612e1e4fbc8f73e5c4d650528f4", default-features = false }
+console_error_panic_hook = { version = "0.1.7" }
+js-sys = { version = "=0.3.95", default-features = false }
+sedimentree_wasm = { git = "https://github.com/inkandswitch/subduction", rev = "8984f900f2ceb612e1e4fbc8f73e5c4d650528f4", default-features = false }
+serde = { version = "1.0", features = ["derive"] }
+serde-wasm-bindgen = "0.6.5"
+tracing = { version = "0.1.41", default-features = false }
+wasm-bindgen = { version = "=0.2.118", features = ["serde-serialize", "std"] }
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = "z"
+panic = "abort"
+strip = "symbols"

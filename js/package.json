@@ -1,0 +1,78 @@
+{
+  "name": "@dxos/automerge-subduction-unified",
+  "version": "0.1.0",
+  "description": "Unified WASM bindings for Automerge documents and Subduction replication",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "main": "./dist/cjs/node.cjs",
+  "module": "./dist/esm/bundler.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": [
+    "./dist/esm/node.js",
+    "./dist/esm/web.js",
+    "./dist/esm/workerd.js",
+    "./dist/esm/bundler.js",
+    "./dist/esm/slim.js"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "workerd": {
+        "import": "./dist/esm/workerd.js",
+        "require": "./dist/cjs/web.cjs"
+      },
+      "node": {
+        "import": "./dist/esm/node.js",
+        "require": "./dist/cjs/node.cjs"
+      },
+      "browser": {
+        "import": "./dist/esm/bundler.js",
+        "require": "./dist/cjs/web.cjs"
+      },
+      "import": "./dist/esm/web.js",
+      "require": "./dist/cjs/web.cjs"
+    },
+    "./slim": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/esm/slim.js",
+      "require": "./dist/cjs/slim.cjs"
+    },
+    "./wasm": "./dist/automerge-subduction-unified.wasm",
+    "./wasm-base64": {
+      "import": "./dist/esm/wasm-base64.js",
+      "require": "./dist/cjs/wasm-base64.cjs"
+    }
+  },
+  "scripts": {
+    "build": "pnpm run clean && pnpm run build-node && pnpm run build-bundler && pnpm run build-slim && pnpm run package-dist",
+    "build-node": "wasm-pack build ../crates/automerge_subduction_unified_wasm --out-dir ../../js/pkg-node --target nodejs --release",
+    "build-bundler": "wasm-pack build ../crates/automerge_subduction_unified_wasm --out-dir ../../js/pkg --target bundler --release",
+    "build-slim": "node build_slim.js",
+    "clean": "node -e \"import('node:fs/promises').then(fs => Promise.all(['dist','pkg','pkg-node','pkg-slim'].map(path => fs.rm(path, { recursive: true, force: true }))))\"",
+    "package-dist": "node package-dist.js",
+    "test": "vitest --run --passWithNoTests",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "automerge",
+    "crdt",
+    "subduction",
+    "sync",
+    "wasm"
+  ],
+  "license": "MIT OR Apache-2.0",
+  "devDependencies": {
+    "@types/node": "^22.17.2",
+    "typescript": "^5.9.2",
+    "vite": "^5.4.19",
+    "vite-plugin-wasm": "^3.5.0",
+    "vitest": "^2.1.9",
+    "wasm-pack": "^0.14.0"
+  }
+}

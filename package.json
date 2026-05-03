@@ -1,0 +1,19 @@
+{
+  "name": "@dxos/automerge-subduction-unified-root",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm --dir js build",
+    "test": "pnpm --dir js test",
+    "check": "cargo check --workspace && pnpm --dir js test"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "esbuild@<=0.24.2": ">=0.25.0"
+    }
+  },
+  "packageManager": "pnpm@10.13.1"
+}
