@@ -35,12 +35,130 @@ async function copyCjsSnippets(from, to) {
   }
 }
 
-function patchEsmWasmImport(text) {
-  return text.replaceAll(`./${bindgenWasm}`, `../${wasmName}`);
+function replaceRequired(text, search, replacement, description) {
+  if (!text.includes(search)) {
+    throw new Error(`could not patch wasm-bindgen output: ${description}`);
+  }
+  return text.replace(search, replacement);
 }
 
-function patchCjsWasmPath(text) {
-  return text.replaceAll(bindgenWasm, `../${wasmName}`);
+function patchWebBindgen(text) {
+  let patched = replaceRequired(
+    text,
+    `new URL('${bindgenWasm}', import.meta.url)`,
+    `new URL('../${wasmName}', import.meta.url)`,
+    'web wasm URL',
+  );
+
+  const initGuard = '    if (wasm !== undefined) return wasm;\n\n\n';
+  patched = replaceRequired(patched, initGuard, '', 'web initSync existing-instance guard');
+  patched = replaceRequired(patched, initGuard, '', 'web async init existing-instance guard');
+
+  patched = replaceRequired(
+    patched,
+    `async function __wbg_init(module_or_path) {`,
+    `function isWasmLoaded() {
+    return wasmModule != null;
+}
+
+function reinitWasmSync() {
+    if (wasmModule == null) {
+        throw new Error('reinitWasm called before wasm was initialized.');
+    }
+    initSync({ module: wasmModule });
+}
+
+async function __wbg_init(module_or_path) {`,
+    'web reinit exports',
+  );
+
+  return replaceRequired(
+    patched,
+    'export { initSync, __wbg_init as default };',
+    'export { initSync, isWasmLoaded, reinitWasmSync, __wbg_init as default };',
+    'web export list',
+  );
+}
+
+function patchNodeBindgen(text) {
+  return replaceRequired(
+    text,
+    `const wasmPath = \`\${__dirname}/${bindgenWasm}\`;
+const wasmBytes = require('fs').readFileSync(wasmPath);
+const wasmModule = new WebAssembly.Module(wasmBytes);
+let wasm = new WebAssembly.Instance(wasmModule, __wbg_get_imports()).exports;
+wasm.__wbindgen_start();
+`,
+    `const wasmPath = \`\${__dirname}/../${wasmName}\`;
+let wasmModule = null;
+let wasm;
+
+function instantiateWasm() {
+    if (wasmModule === null) {
+        const wasmBytes = require('fs').readFileSync(wasmPath);
+        wasmModule = new WebAssembly.Module(wasmBytes);
+    }
+    wasm = new WebAssembly.Instance(wasmModule, __wbg_get_imports()).exports;
+    cachedDataViewMemory0 = null;
+    cachedUint8ArrayMemory0 = null;
+    wasm.__wbindgen_start();
+    return wasm;
+}
+
+function initSync() {
+    if (wasm !== undefined) return wasm;
+    return instantiateWasm();
+}
+exports.initSync = initSync;
+
+function isWasmLoaded() {
+    return wasmModule !== null;
+}
+exports.isWasmLoaded = isWasmLoaded;
+
+function reinitWasmSync() {
+    if (wasmModule === null) {
+        throw new Error('reinitWasm called before wasm was initialized.');
+    }
+    instantiateWasm();
+}
+exports.reinitWasmSync = reinitWasmSync;
+
+async function __wbg_init() {
+    return initSync();
+}
+exports.default = __wbg_init;
+`,
+    'node lazy init footer',
+  );
+}
+
+function patchTypes(text) {
+  return replaceRequired(
+    text,
+    `/**
+ * Return release metadata for diagnostics.
+ */
+export function wasmReleaseInfo(): any;
+`,
+    `/**
+ * Return release metadata for diagnostics.
+ */
+export function wasmReleaseInfo(): any;
+
+/**
+ * Loaded wasm module.
+ * @returns true if the wasm module has been loaded.
+ */
+export function isWasmLoaded(): boolean;
+
+/**
+ * Re-initialize the wasm module.
+ */
+export function reinitWasmSync(): void;
+`,
+    'type declarations',
+  );
 }
 
 function exportedNames(bindgenText) {
@@ -62,7 +180,7 @@ const require = createRequire(import.meta.url);
 const mod = require('../cjs/node.cjs');
 
 export default async function init() {
-  return mod;
+  return mod.default();
 }
 
 ${exports}
@@ -76,20 +194,25 @@ async function main() {
 
   await copyBinary(path.join('pkg', bindgenWasm), path.join(distDir, wasmName));
   const bindgenText = await readFile(path.join('pkg', `${bindgenBase}.js`), 'utf8');
-  const names = exportedNames(bindgenText);
-  await writeFile(path.join(esmDir, 'bindgen.js'), patchEsmWasmImport(bindgenText));
+  const names = [
+    ...exportedNames(bindgenText),
+    'initSync',
+    'isWasmLoaded',
+    'reinitWasmSync',
+  ];
   await copyText(
-    path.join('pkg', `${bindgenBase}_bg.js`),
-    path.join(esmDir, `${bindgenBase}_bg.js`),
+    path.join('pkg-slim', `${bindgenBase}.js`),
+    path.join(esmDir, 'bindgen.js'),
+    patchWebBindgen,
   );
-  await cp(path.join('pkg', 'snippets'), path.join(esmDir, 'snippets'), {
+  await cp(path.join('pkg-slim', 'snippets'), path.join(esmDir, 'snippets'), {
     recursive: true,
   });
-  await copyText(path.join('pkg', `${bindgenBase}.d.ts`), path.join(distDir, 'index.d.ts'));
+  await copyText(path.join('pkg-slim', `${bindgenBase}.d.ts`), path.join(distDir, 'index.d.ts'), patchTypes);
   await copyText(
     path.join('pkg-node', `${bindgenBase}.js`),
     path.join(cjsDir, 'node.cjs'),
-    patchCjsWasmPath,
+    patchNodeBindgen,
   );
   await writeFile(path.join(cjsDir, 'package.json'), '{"type":"commonjs"}\n');
   await copyCjsSnippets(path.join('pkg', 'snippets'), path.join(cjsDir, 'snippets'));

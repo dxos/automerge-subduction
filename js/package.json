@@ -27,6 +27,10 @@
         "import": "./dist/esm/workerd.js",
         "require": "./dist/cjs/web.cjs"
       },
+      "worker": {
+        "import": "./dist/esm/workerd.js",
+        "require": "./dist/cjs/web.cjs"
+      },
       "node": {
         "import": "./dist/esm/node.js",
         "require": "./dist/cjs/node.cjs"

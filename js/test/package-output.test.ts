@@ -3,6 +3,7 @@ import path from 'node:path';
 import { describe, test } from 'vitest';
 
 const distDir = path.resolve('dist');
+const packageJsonPath = path.resolve('package.json');
 
 async function listFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -43,5 +44,40 @@ describe('package output', () => {
     expect(combined).not.toMatch(/^\s*.*require\(['"]@automerge\/automerge-subduction['"]\)/m);
     expect(combined).not.toContain('automerge_wasm_bg.wasm');
     expect(combined).not.toContain('automerge_subduction_wasm_bg.wasm');
+  });
+
+  test('exposes environment-specific package entrypoints', async ({ expect }) => {
+    const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
+    const rootExport = packageJson.exports['.'];
+
+    expect(rootExport.node.import).toBe('./dist/esm/node.js');
+    expect(rootExport.browser.import).toBe('./dist/esm/bundler.js');
+    expect(rootExport.workerd.import).toBe('./dist/esm/workerd.js');
+    expect(rootExport.worker.import).toBe('./dist/esm/workerd.js');
+    expect(rootExport.import).toBe('./dist/esm/web.js');
+    expect(packageJson.exports['./slim'].import).toBe('./dist/esm/slim.js');
+    expect(packageJson.exports['./wasm']).toBe('./dist/automerge-subduction-unified.wasm');
+    expect(packageJson.exports['./wasm-base64'].import).toBe('./dist/esm/wasm-base64.js');
+  });
+
+  test('keeps web, worker, bundler, and slim entrypoints free of Node-only imports', async ({
+    expect,
+  }) => {
+    const entrypoints = [
+      'dist/esm/web.js',
+      'dist/esm/workerd.js',
+      'dist/esm/bundler.js',
+      'dist/esm/slim.js',
+      'dist/esm/bindgen.js',
+    ];
+    const contents = await Promise.all(
+      entrypoints.map((entrypoint) => readFile(path.resolve(entrypoint), 'utf8')),
+    );
+    const combined = contents.join('\n');
+
+    expect(combined).not.toContain("from 'node:");
+    expect(combined).not.toContain('require(');
+    expect(combined).not.toContain('readFileSync');
+    expect(combined).not.toContain('__dirname');
   });
 });
