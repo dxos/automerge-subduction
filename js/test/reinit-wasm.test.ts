@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 
 import { afterEach, describe, test, vi } from 'vitest';
@@ -6,9 +7,19 @@ import { afterEach, describe, test, vi } from 'vitest';
 const require = createRequire(import.meta.url);
 let importCounter = 0;
 
-async function importFreshNodeDist() {
+function requireFreshCjs(specifier: string) {
+  delete require.cache[require.resolve(specifier)];
+  return require(specifier);
+}
+
+function requireFreshNodeDist() {
   delete require.cache[require.resolve('../dist/cjs/node.cjs')];
-  return import(/* @vite-ignore */ `../dist/esm/node.js?fresh=${importCounter++}`);
+  delete require.cache[require.resolve('../dist/cjs/web-bindings.cjs')];
+  return require('../dist/cjs/node.cjs');
+}
+
+async function importDist(specifier: string) {
+  return import(/* @vite-ignore */ specifier);
 }
 
 describe('wasm reinitialization', () => {
@@ -18,21 +29,25 @@ describe('wasm reinitialization', () => {
 
   test('exports reinit helpers from generated and public ESM entrypoints', async ({ expect }) => {
     const modules = await Promise.all([
-      import('../dist/esm/bindgen.js'),
-      import('../dist/esm/web.js'),
-      import('../dist/esm/bundler.js'),
-      import('../dist/esm/workerd.js'),
-      import('../dist/esm/slim.js'),
+      importDist('../dist/wasm_bindgen/web/automerge_subduction_unified_wasm.js'),
+      importDist(`../dist/esm/node.js?fresh=${importCounter++}`),
+      importDist('../dist/esm/web.js'),
+      importDist('../dist/esm/slim.js'),
     ]);
+    const workerdEntrypoint = await readFile('dist/esm/workerd.js', 'utf8');
 
     for (const mod of modules) {
       expect(mod.isWasmLoaded).toBeTypeOf('function');
       expect(mod.reinitWasmSync).toBeTypeOf('function');
     }
+    expect(workerdEntrypoint).toContain(
+      "export * from '../wasm_bindgen/web/automerge_subduction_unified_wasm.js'",
+    );
   });
 
-  test('reports load state and throws before initialization', async ({ expect }) => {
-    const mod = await importFreshNodeDist();
+  test('reports load state and throws before manual slim initialization', async ({ expect }) => {
+    delete require.cache[require.resolve('../dist/cjs/debug-web-bindings.cjs')];
+    const mod = requireFreshCjs('../dist/cjs/debug-slim.cjs');
 
     expect(mod.isWasmLoaded()).toBe(false);
     expect(() => mod.reinitWasmSync()).toThrow(
@@ -42,15 +57,12 @@ describe('wasm reinitialization', () => {
 
   test('reinitializes from the cached unified wasm module', async ({ expect }) => {
     const readFileSync = vi.spyOn(fs, 'readFileSync');
-    const mod = await importFreshNodeDist();
+    const mod = requireFreshNodeDist();
     const wasmReadCount = () =>
       readFileSync.mock.calls.filter(([file]) =>
-        String(file).endsWith('automerge-subduction-unified.wasm'),
+        String(file).endsWith('automerge_subduction_unified_wasm_bg.wasm'),
       ).length;
 
-    expect(mod.isWasmLoaded()).toBe(false);
-
-    await mod.default();
     expect(mod.isWasmLoaded()).toBe(true);
     expect(wasmReadCount()).toBe(1);
 

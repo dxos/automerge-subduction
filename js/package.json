@@ -18,7 +18,11 @@
     "./dist/esm/web.js",
     "./dist/esm/workerd.js",
     "./dist/esm/bundler.js",
-    "./dist/esm/slim.js"
+    "./dist/esm/slim.js",
+    "./dist/esm/debug-bundler.js",
+    "./dist/esm/debug-node.js",
+    "./dist/esm/debug-web.js",
+    "./dist/esm/debug-workerd.js"
   ],
   "exports": {
     ".": {
@@ -51,13 +55,44 @@
     "./wasm-base64": {
       "import": "./dist/esm/wasm-base64.js",
       "require": "./dist/cjs/wasm-base64.cjs"
-    }
+    },
+    "./iife": "./dist/iife/index.js",
+    "./debug": {
+      "types": "./dist/index.d.ts",
+      "workerd": {
+        "import": "./dist/esm/debug-workerd.js",
+        "require": "./dist/cjs/debug-web.cjs"
+      },
+      "worker": {
+        "import": "./dist/esm/debug-workerd.js",
+        "require": "./dist/cjs/debug-web.cjs"
+      },
+      "node": {
+        "import": "./dist/esm/debug-node.js",
+        "require": "./dist/cjs/debug-node.cjs"
+      },
+      "browser": {
+        "import": "./dist/esm/debug-bundler.js",
+        "require": "./dist/cjs/debug-web.cjs"
+      },
+      "import": "./dist/esm/debug-web.js",
+      "require": "./dist/cjs/debug-web.cjs"
+    },
+    "./debug/slim": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/esm/debug-slim.js",
+      "require": "./dist/cjs/debug-slim.cjs"
+    },
+    "./debug/wasm": "./dist/automerge-subduction-unified-debug.wasm",
+    "./debug/wasm-base64": {
+      "import": "./dist/esm/debug-wasm-base64.js",
+      "require": "./dist/cjs/debug-wasm-base64.cjs"
+    },
+    "./debug/iife": "./dist/iife/debug.js"
   },
   "scripts": {
-    "build": "pnpm run clean && pnpm run build-node && pnpm run build-bundler && pnpm run build-slim && pnpm run package-dist",
-    "build-node": "wasm-pack build ../crates/automerge_subduction_unified_wasm --out-dir ../../js/pkg-node --target nodejs --release",
-    "build-bundler": "wasm-pack build ../crates/automerge_subduction_unified_wasm --out-dir ../../js/pkg --target bundler --release",
-    "build-slim": "node build_slim.js",
+    "build": "pnpm run clean && pnpm run build-bodge && pnpm run package-dist",
+    "build-bodge": "wasm-bodge build --crate-path ../crates/automerge_subduction_unified_wasm --package-json ./package.json --out-dir ./dist --debug-profile wasm-debug",
     "clean": "node -e \"import('node:fs/promises').then(fs => Promise.all(['dist','pkg','pkg-node','pkg-slim'].map(path => fs.rm(path, { recursive: true, force: true }))))\"",
     "package-dist": "node package-dist.js",
     "test": "vitest --run --passWithNoTests",
@@ -70,9 +105,20 @@
     "sync",
     "wasm"
   ],
+  "author": "DXOS",
   "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dxos/automerge-subduction.git",
+    "directory": "js"
+  },
+  "homepage": "https://github.com/dxos/automerge-subduction",
+  "bugs": {
+    "url": "https://github.com/dxos/automerge-subduction/issues"
+  },
   "devDependencies": {
     "@types/node": "^22.17.2",
+    "esbuild": "^0.28.0",
     "typescript": "^5.9.2",
     "vite": "^5.4.19",
     "vite-plugin-wasm": "^3.5.0",

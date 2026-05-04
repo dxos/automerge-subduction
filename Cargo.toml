@@ -25,3 +25,12 @@ lto = "fat"
 opt-level = "z"
 panic = "abort"
 strip = "symbols"
+
+[profile.wasm-debug]
+inherits = "release"
+debug = "limited"
+debug-assertions = true
+lto = "thin"
+opt-level = 1
+overflow-checks = true
+strip = "none"
